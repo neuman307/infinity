@@ -1,9 +1,10 @@
 import requests
 import json
 
-# 발급받은 키를 여기에 입력합니다. (실제 키는 절대 외부에 공개되면 안 됩니다!)
+# 1. API 키 및 계좌정보 세팅
 APP_KEY = "발급받은_APP_KEY를_여기에_넣으세요"
 APP_SECRET = "발급받은_APP_SECRET을_여기에_넣으세요"
+ACCOUNT_NO = "모의투자_계좌번호_앞8자리"  # 예: "50001234"
 
 # 모의투자용 기본 URL 
 BASE_URL = "https://openapivts.koreainvestment.com:29443"
@@ -37,7 +38,7 @@ def get_current_price(token, ticker="TQQQ"):
         "authorization": f"Bearer {token}",
         "appkey": APP_KEY,
         "appsecret": APP_SECRET,
-        "tr_id": "FHKST01010100"  # 해외주식 현재가 조회 암호
+        "tr_id": "FHKST01010100"  
     }
     
     params = {
@@ -57,16 +58,58 @@ def get_current_price(token, ticker="TQQQ"):
         print("🔴 현재가 조회 실패:", res.text)
         return None
 
-# --- 여기서부터 메인 테스트 실행 공간 (파일 맨 아래에 한 번만 작성) ---
+def send_order(token, order_type, ticker, quantity, price):
+    """
+    미국 주식 매수/매도 주문을 전송하는 함수
+    :param order_type: "BUY" 또는 "SELL"
+    :param ticker: 종목명 (예: "TQQQ")
+    :param quantity: 주문 수량 (정수)
+    :param price: 주문 단가 (지정가)
+    """
+    url = f"{BASE_URL}/uapi/overseas-stock/v1/trading/order"
+    
+    # 매수/매도에 따라 tr_id 분기 처리 (모의투자 기준)
+    tr_id = "VTTT1002U" if order_type == "BUY" else "VTTT1006U"
+    
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": tr_id
+    }
+    
+    body = {
+        "CANO": ACCOUNT_NO,         # 종합계좌번호 앞 8자리
+        "ACNT_PRDT_CD": "01",       # 계좌상품코드 (보통 01)
+        "OVRS_EXCG_CD": "NAS",      # 거래소코드 (나스닥 NAS)
+        "PDNO": ticker,             # 종목코드
+        "ORD_QTY": str(quantity),   # 주문 수량 (문자열로 전달해야 함)
+        "OVRS_ORD_UNPR": str(price),# 주문 단가 (문자열로 전달해야 함)
+        "ORD_DVSN": "00"            # 주문구분 (00: 지정가)
+    }
+    
+    res = requests.post(url, headers=headers, data=json.dumps(body))
+    
+    if res.status_code == 200 and res.json()["rt_cd"] == "0":
+        print(f"✅ [{order_type}] {ticker} {quantity}주 주문 전송 완료!")
+        return True
+    else:
+        print(f"❌ [{order_type}] 주문 실패:", res.text)
+        return False
+
+# --- 메인 테스트 실행 공간 ---
 if __name__ == "__main__":
     print("증권사 API 연동 테스트를 시작합니다...")
     
-    # 1. 출입증 발급
     my_token = get_access_token()
     
     if my_token:
-        # 2. TQQQ 현재가 조회
+        # TQQQ 현재가 조회
         tqqq_price = get_current_price(my_token, "TQQQ")
         
-        # 3. 내친김에 SOXL 현재가도 같이 조회해보기
-        soxl_price = get_current_price(my_token, "SOXL")
+        # [테스트] 방금 조회한 현재가보다 10달러 낮게, TQQQ 1주 지정가 매수 주문 넣어보기
+        # (현재가보다 낮게 걸어두므로 실제 체결은 안 되고 주문 접수만 됩니다)
+        if tqqq_price:
+            test_order_price = tqqq_price - 10 
+            send_order(my_token, "BUY", "TQQQ", 1, test_order_price)
