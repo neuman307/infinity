@@ -1,3 +1,7 @@
+# app.py 맨 위에 추가
+import database
+database.init_db()  # 앱 시작 시 DB가 없으면 자동으로 만들어줍니다.
+
 import streamlit as st
 
 # 페이지 기본 설정
